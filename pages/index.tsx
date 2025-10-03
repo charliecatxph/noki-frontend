@@ -1,686 +1,791 @@
-import { useState } from "react";
-import { Geist, Inter } from "next/font/google";
-import { Bar } from "react-chartjs-2";
+import {
+  Check,
+  LineChart,
+  Users,
+  UserCheck,
+  UserX,
+  Clock,
+  Settings,
+  UserPlus,
+  Building2,
+  ChevronRight,
+  Phone,
+  TrendingUp,
+  LayoutDashboard,
+  Bell,
+  IdCard,
+} from "lucide-react";
+import { Inter, Poppins, Space_Grotesk } from "next/font/google";
+import { motion, useDeprecatedAnimatedState } from "framer-motion";
+import { useRouter } from "next/router";
+import { Line, Bar } from "react-chartjs-2";
+import Sidebar from "../components/Sidebar";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  PointElement,
+  LineElement,
   BarElement,
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from "chart.js";
-import { Plus, Edit, Trash2, Check } from "lucide-react";
+import { GetServerSidePropsContext } from "next";
+import { authGate } from "@/middlewares/secureEnokiGate";
+import { isUserDataComplete, selectUserData } from "@/redux/features/userSlice";
+import { useSelector } from "react-redux";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import TimeAgoComponent from "@/components/TimeAgo";
+import { useEffect, useState } from "react";
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
+  PointElement,
+  LineElement,
   BarElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({ subsets: ["latin"] });
+const poppins = Poppins({
   subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+});
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-});
-
-const NAV_ITEMS = [
-  { label: "Dashboard", key: "dashboard" },
-  { label: "Departments", key: "departments" },
-  { label: "Teachers", key: "teachers" },
-  { label: "Students", key: "students" },
-];
-const NAV_BOTTOM = [
-  { label: "No-Ki Settings", key: "settings" },
-  { label: "No-Ki RFID Programmer", key: "nkcp" },
-  { label: "No-Ki Table Lighting", key: "nktl" },
-  { label: "No-Ki App", key: "nktl" },
-  { label: "User Authentication and Credentials", key: "auth" },
-];
-
-const DUMMY_DEPARTMENTS = [
-  { id: 1, name: "Mathematics", head: "Dr. Smith" },
-  { id: 2, name: "Science", head: "Dr. Johnson" },
-  { id: 3, name: "English", head: "Ms. Lee" },
-];
-const DUMMY_TEACHERS = [
-  { id: 1, name: "Alice Brown", department: "Mathematics" },
-  { id: 2, name: "Bob White", department: "Science" },
-  { id: 3, name: "Carol Black", department: "English" },
-];
-const DUMMY_STUDENTS = [
+// Mock data
+const mockTeachers = [
   {
     id: 1,
-    name: "John Doe",
-    studentId: "2023001",
-    rfid: "A1B2C3D4E5",
-    course: "BS Math",
-    department: "Mathematics",
+    name: "Dr. Sarah Johnson",
+    department: "Computer Science",
+    status: "in-office",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "2 mins ago",
   },
   {
     id: 2,
-    name: "Jane Roe",
-    studentId: "2023002",
-    rfid: "F6G7H8I9J0",
-    course: "BS Science",
-    department: "Science",
+    name: "Prof. Michael Chen",
+    department: "Mathematics",
+    status: "in-class",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "Teaching now",
   },
   {
     id: 3,
-    name: "Sam Poe",
-    studentId: "2023003",
-    rfid: "K1L2M3N4O5",
-    course: "BA English",
+    name: "Dr. Emily Rodriguez",
+    department: "Physics",
+    status: "absent",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "1 hour ago",
+  },
+  {
+    id: 4,
+    name: "Prof. David Kim",
+    department: "Chemistry",
+    status: "in-office",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "5 mins ago",
+  },
+  {
+    id: 5,
+    name: "Dr. Lisa Thompson",
+    department: "Biology",
+    status: "in-class",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "Teaching now",
+  },
+  {
+    id: 6,
+    name: "Prof. James Wilson",
     department: "English",
+    status: "in-office",
+    avatar: "/api/placeholder/40/40",
+    lastSeen: "Just now",
   },
 ];
 
-// Dummy call data for dashboard
-const DUMMY_CALLS_TODAY = 42;
-const DUMMY_CALLS_BY_TEACHER = {
-  today: [
-    { teacher: "Alice Brown", count: 12 },
-    { teacher: "Bob White", count: 8 },
-    { teacher: "Carol Black", count: 5 },
-  ],
-  week: [
-    { teacher: "Alice Brown", count: 30 },
-    { teacher: "Bob White", count: 22 },
-    { teacher: "Carol Black", count: 15 },
-  ],
-  month: [
-    { teacher: "Alice Brown", count: 80 },
-    { teacher: "Bob White", count: 60 },
-    { teacher: "Carol Black", count: 40 },
-  ],
-  all: [
-    { teacher: "Alice Brown", count: 200 },
-    { teacher: "Bob White", count: 150 },
-    { teacher: "Carol Black", count: 100 },
-  ],
+const todayStats = {
+  totalCalls: 47,
+  inOffice: 12,
+  inClass: 8,
+  absent: 4,
 };
 
-// Type definitions
-
-type Department = { id: number; name: string; head: string };
-type Teacher = { id: number; name: string; department: string };
-type Student = {
-  id: number;
-  name: string;
-  studentId: string;
-  rfid: string;
-  course: string;
-  department: string;
-};
-
-type TableColumn<T> = { key: string; label: string };
-type TableConfig<T> = {
-  columns: TableColumn<T>[];
-  data: T[];
-  fields: { key: string; label: string }[];
-  onEdit: (row: T) => void;
-  onDelete: (row: T) => void;
-  onAdd: () => void;
-};
-
-type Section =
-  | "dashboard"
-  | "departments"
-  | "teachers"
-  | "students"
-  | "settings"
-  | "auth";
-
-type ModalState = {
-  open: boolean;
-  type: "departments" | "teachers" | "students" | null;
-  data: Department | Teacher | Student | null;
-};
-
-function Table<T extends { id: number }>({
-  columns,
-  data,
-  onEdit,
-  onDelete,
-}: {
-  columns: { key: string; label: string }[];
-  data: T[];
-  onEdit: (row: T) => void;
-  onDelete: (row: T) => void;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-lg shadow bg-white">
-      <table className="min-w-full text-slate-900">
-        <thead>
-          <tr className="bg-slate-100">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className="px-4 py-2 text-left font-semibold border-b"
-              >
-                {col.label}
-              </th>
-            ))}
-            <th className="px-4 py-2 border-b">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row) => (
-            <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-              {columns.map((col) => (
-                <td key={col.key} className="px-4 py-2 border-b">
-                  {String((row as Record<string, any>)[col.key])}
-                </td>
-              ))}
-              <td className="px-4 py-2 border-b flex gap-2">
-                <button
-                  className="text-blue-700 hover:bg-blue-100 p-1 rounded"
-                  onClick={() => onEdit(row)}
-                >
-                  <Edit size={16} />
-                </button>
-                <button
-                  className="text-red-600 hover:bg-red-100 p-1 rounded"
-                  onClick={() => onDelete(row)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SearchBar({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <input
-      className="w-full mb-4 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-    />
-  );
-}
-
-function AddEditModal<T extends { id?: number }>({
-  open,
-  onClose,
-  onSave,
-  fields,
-  initialData,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onSave: (form: Partial<T>) => void;
-  fields: { key: string; label: string }[];
-  initialData?: Partial<T> | null;
-}) {
-  const [form, setForm] = useState<Partial<T>>(initialData || {});
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-lg">
-        <h2 className="text-xl font-bold mb-4">
-          {initialData ? "Edit" : "Add"}
-        </h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSave(form);
-          }}
-          className="space-y-4"
-        >
-          {fields.map((f) => (
-            <div key={String(f.key)}>
-              <label className="block mb-1 font-medium">{f.label}</label>
-              <input
-                className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-                type="text"
-                value={(form[f.key as keyof T] as string) || ""}
-                onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                required
-              />
-            </div>
-          ))}
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-            >
-              Save
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
-  const [active, setActive] = useState<Section>("dashboard");
-  const [departments, setDepartments] =
-    useState<Department[]>(DUMMY_DEPARTMENTS);
-  const [teachers, setTeachers] = useState<Teacher[]>(DUMMY_TEACHERS);
-  const [students, setStudents] = useState<Student[]>(DUMMY_STUDENTS);
-  const [search, setSearch] = useState("");
-  const [modal, setModal] = useState<ModalState>({
-    open: false,
-    type: null,
-    data: null,
-  });
-  const [callsRange, setCallsRange] = useState<
-    "today" | "week" | "month" | "all"
-  >("today");
-
-  // Filtered data
-  const filteredDepartments = departments.filter(
-    (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.head.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredTeachers = teachers.filter(
-    (t) =>
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.department.toLowerCase().includes(search.toLowerCase())
-  );
-  const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.studentId.toLowerCase().includes(search.toLowerCase()) ||
-      s.rfid.toLowerCase().includes(search.toLowerCase()) ||
-      s.course.toLowerCase().includes(search.toLowerCase()) ||
-      s.department.toLowerCase().includes(search.toLowerCase())
-  );
-
-  // Modal handlers
-  const handleAdd = (type: "departments" | "teachers" | "students") =>
-    setModal({ open: true, type, data: null });
-  const handleEdit = (
-    type: "departments" | "teachers" | "students",
-    data: Department | Teacher | Student
-  ) => setModal({ open: true, type, data });
-  const handleDelete = (
-    type: "departments" | "teachers" | "students",
-    row: Department | Teacher | Student
-  ) => {
-    if (type === "departments")
-      setDepartments((d) => d.filter((x) => x.id !== (row as Department).id));
-    if (type === "teachers")
-      setTeachers((d) => d.filter((x) => x.id !== (row as Teacher).id));
-    if (type === "students")
-      setStudents((d) => d.filter((x) => x.id !== (row as Student).id));
-  };
-  const handleSave = (
-    form: Partial<Department> | Partial<Teacher> | Partial<Student>
-  ) => {
-    if (modal.type === "departments") {
-      if (modal.data && "id" in modal.data) {
-        setDepartments((d) =>
-          d.map((x) =>
-            x.id === (modal.data as Department).id
-              ? ({ ...x, ...form } as Department)
-              : x
-          )
-        );
-      } else {
-        setDepartments((d) => [
-          ...d,
-          { ...form, id: Date.now() } as Department,
-        ]);
-      }
-    }
-    if (modal.type === "teachers") {
-      if (modal.data && "id" in modal.data) {
-        setTeachers((d) =>
-          d.map((x) =>
-            x.id === (modal.data as Teacher).id
-              ? ({ ...x, ...form } as Teacher)
-              : x
-          )
-        );
-      } else {
-        setTeachers((d) => [...d, { ...form, id: Date.now() } as Teacher]);
-      }
-    }
-    if (modal.type === "students") {
-      if (modal.data && "id" in modal.data) {
-        setStudents((d) =>
-          d.map((x) =>
-            x.id === (modal.data as Student).id
-              ? ({ ...x, ...form } as Student)
-              : x
-          )
-        );
-      } else {
-        setStudents((d) => [...d, { ...form, id: Date.now() } as Student]);
-      }
-    }
-    setModal({ open: false, type: null, data: null });
-  };
-
-  // Table configs
-  const tableConfigs: Record<
-    "departments" | "teachers" | "students",
-    TableConfig<any>
-  > = {
-    departments: {
-      columns: [
-        { key: "name", label: "Department Name" },
-        { key: "head", label: "Head of Department" },
-      ],
-      data: filteredDepartments,
-      fields: [
-        { key: "name", label: "Department Name" },
-        { key: "head", label: "Head of Department" },
-      ],
-      onEdit: (row: Department) => handleEdit("departments", row),
-      onDelete: (row: Department) => handleDelete("departments", row),
-      onAdd: () => handleAdd("departments"),
+const historicalData = {
+  labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  datasets: [
+    {
+      label: "Teacher Calls",
+      data: [32, 45, 38, 52, 47, 23, 15],
+      borderColor: "rgb(59, 130, 246)",
+      backgroundColor: "rgba(59, 130, 246, 0.1)",
+      fill: true,
+      tension: 0.4,
     },
-    teachers: {
-      columns: [
-        { key: "name", label: "Teacher Name" },
-        { key: "department", label: "Department" },
-      ],
-      data: filteredTeachers,
-      fields: [
-        { key: "name", label: "Teacher Name" },
-        { key: "department", label: "Department" },
-      ],
-      onEdit: (row: Teacher) => handleEdit("teachers", row),
-      onDelete: (row: Teacher) => handleDelete("teachers", row),
-      onAdd: () => handleAdd("teachers"),
-    },
-    students: {
-      columns: [
-        { key: "name", label: "Student Name" },
-        { key: "studentId", label: "Student ID" },
-        { key: "rfid", label: "RFID Hash" },
-        { key: "course", label: "Course" },
-        { key: "department", label: "Department" },
-      ],
-      data: filteredStudents,
-      fields: [
-        { key: "name", label: "Student Name" },
-        { key: "studentId", label: "Student ID" },
-        { key: "rfid", label: "RFID Hash" },
-        { key: "course", label: "Course" },
-        { key: "department", label: "Department" },
-      ],
-      onEdit: (row: Student) => handleEdit("students", row),
-      onDelete: (row: Student) => handleDelete("students", row),
-      onAdd: () => handleAdd("students"),
-    },
-  };
+  ],
+};
 
-  // Chart.js data for dashboard
-  const callsData = DUMMY_CALLS_BY_TEACHER[callsRange];
-  const barData = {
-    labels: callsData.map((d) => d.teacher),
-    datasets: [
-      {
-        label: "Calls",
-        data: callsData.map((d) => d.count),
-        backgroundColor: "#2563eb",
-        borderRadius: 6,
-        barThickness: 32,
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: false,
+    },
+    tooltip: {
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      titleColor: "white",
+      bodyColor: "white",
+      borderColor: "rgba(59, 130, 246, 0.5)",
+      borderWidth: 1,
+    },
+  },
+  scales: {
+    x: {
+      grid: {
+        display: false,
       },
-    ],
-  };
-  const barOptions = {
-    responsive: true,
-    plugins: {
-      legend: { display: false },
-      title: { display: false },
+      ticks: {
+        color: "#6B7280",
+      },
     },
-    indexAxis: "y" as const,
-    scales: {
-      x: { beginAtZero: true, grid: { color: "#e5e7eb" } },
-      y: { grid: { color: "#e5e7eb" } },
+    y: {
+      grid: {
+        color: "rgba(0, 0, 0, 0.1)",
+      },
+      ticks: {
+        color: "#6B7280",
+      },
     },
+  },
+};
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "AVAILABLE":
+      return "bg-green-500";
+    case "IN_CLASS":
+      return "bg-blue-500";
+    case "OUT":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case "AVAILABLE":
+      return "Available";
+    case "IN_CLASS":
+      return "In Class";
+    case "OUT":
+      return "Out";
+    default:
+      return "Unknown";
+  }
+};
+
+export async function getServerSideProps(ctx: GetServerSidePropsContext) {
+  return await authGate(ctx);
+}
+
+export default function Home({
+  user,
+  queries,
+  api,
+}: {
+  user: any;
+  queries: any;
+  api: string;
+}) {
+  const router = useRouter();
+
+  const userData = useSelector(selectUserData);
+  const __userData = isUserDataComplete(userData) ? userData : user;
+
+  const [todayStats, setTodayStats] = useState({
+    inClass: 0,
+    inBusy: 0,
+    inBreak: 0,
+    available: 0,
+    out: 0,
+  });
+
+  const handleTeacherClick = (teacherId: number) => {
+    router.push(`/`);
   };
 
+  const {
+    data: facultyData = [],
+    isFetched: facultyFetched,
+    isPending: facultyPending,
+    isError: facultyError,
+    isFetching: facultyFetching,
+    isRefetching: facultyRefetching,
+    refetch: facultyRefetch,
+  } = useQuery({
+    queryKey: ["faculty"],
+    queryFn: async () => {
+      const res = await axios.get(`${api}/get-teachers`, {
+        params: {
+          institutionId: __userData.id,
+        },
+      });
+
+      return res.data.data;
+    },
+    enabled: !!__userData.id,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
+
+  useEffect(() => {
+    if (facultyData.length === 0) return;
+    const todayStats = {
+      available: facultyData.filter(
+        (teacher: any) => teacher.statistics.status === "AVAILABLE"
+      ).length,
+      inBreak: facultyData.filter(
+        (teacher: any) => teacher.statistics.status === "IN_BREAK"
+      ).length,
+      inBusy: facultyData.filter(
+        (teacher: any) => teacher.statistics.status === "IN_BUSY"
+      ).length,
+      inClass: facultyData.filter(
+        (teacher: any) => teacher.statistics.status === "IN_CLASS"
+      ).length,
+      out: facultyData.filter(
+        (teacher: any) => teacher.statistics.status === "OUT"
+      ).length,
+    };
+    setTodayStats(todayStats);
+  }, [facultyData]);
+
   return (
-    <div
-      className={`${geistSans.className} font-sans flex min-h-screen bg-muted`}
-    >
-      {/* Sidebar (static, no animation) */}
-      <aside className="w-[350px] bg-blue-600 text-white flex flex-col py-8 px-6 min-h-screen shadow-sm">
-        <div className="mb-8 text-2xl font-bold tracking-tight flex gap-3 items-center">
-          ENo-Ki ®{" "}
-          <span className="bg-yellow-300 text-black px-2 py-0.5 rounded-sm text-xs">
-            ADMIN
-          </span>
-        </div>
-        <nav className="flex-1">
-          <ul className="space-y-2">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.key}>
-                <button
-                  className={`w-full text-left px-3 py-2 rounded transition-colors font-medium ${
-                    active === item.key ? "bg-blue-700" : "hover:bg-blue-500/80"
-                  }`}
-                  onClick={() => {
-                    setActive(item.key as Section);
-                    setSearch("");
-                  }}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <hr className="my-6 border-blue-400/40" />
-          <ul className="space-y-2">
-            {NAV_BOTTOM.map((item) => (
-              <li key={item.key}>
-                <button
-                  className={`w-full text-left px-3 py-2 rounded transition-colors font-medium hover:bg-blue-500/80`}
-                  onClick={() => setActive(item.key as Section)}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <div className="flex-col gap-2 flex">
-          <div className="kiosk-connection flex gap-2 items-center bg-white rounded-2xl px-3 py-0.5 text-black font-[700] text-sm w-max">
-            <Check size="13" strokeWidth={5} />
-            <span>Live Conn. Established</span>
-          </div>
-          <div className="kiosk-connection flex gap-2 items-center bg-white rounded-2xl px-3 py-0.5 text-black font-[700] text-sm w-max">
-            <Check size="13" strokeWidth={5} />
-            <span>Kiosk Active</span>
-          </div>
-        </div>
-        <div className="mt-8 border-t border-blue-400/40 pt-4">
-          <div className="mb-2 text-sm text-blue-100">
-            Logged in as <span className="font-semibold">Charl Concepcion</span>
-          </div>
-          <button className="w-full px-3 py-2 rounded bg-blue-800 hover:bg-blue-900 transition-colors font-medium">
-            Logout
-          </button>
-          <div className="mt-2 text-sm text-blue-400">
-            No-Ki v1.0.0 - build 2025
-          </div>
-        </div>
-      </aside>
-      {/* Main Content */}
-      <main className="flex-1 p-10 bg-slate-50 text-slate-900 min-h-screen">
-        {active === "dashboard" && (
-          <section key="dashboard" className="initial-dashboard">
-            <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-              <div className="bg-white rounded-lg p-6 shadow flex flex-col items-center justify-center">
-                <div className="text-4xl font-bold mb-2">
-                  {DUMMY_CALLS_TODAY}
-                </div>
-                <div className="text-gray-600">Total Calls Today</div>
+    <>
+      <main
+        className={`${poppins.className} bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen`}
+      >
+        <div className="flex">
+          <Sidebar userData={__userData} />
+          <div className="main-panel flex-1">
+            <header
+              className={`${inter.className} p-5 bg-blue-600 text-white w-full sticky top-0 z-10 flex gap-5 items-center`}
+            >
+              <div>
+                <LayoutDashboard size="30" strokeWidth={1.2} />
               </div>
-              <div className="bg-white rounded-lg p-6 shadow md:col-span-2 flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-lg font-semibold">
-                    Most Called Teachers
-                  </div>
-                  <select
-                    className="border rounded px-2 py-1 text-sm bg-slate-50"
-                    value={callsRange}
-                    onChange={(e) => setCallsRange(e.target.value as any)}
+              <div>
+                <h1 className="font-[600]  text-white text-sm">Dashboard</h1>
+                <p className="font-[400] text-white/70 text-xs">
+                  Real-time insights and system management
+                </p>
+              </div>
+            </header>
+            <div className="grid grid-cols-3 gap-8 px-5 p-5">
+              {/* Statistics Panel */}
+              <div className="col-span-2  rounded-2xl statistics p-8 bg-white border border-white/20">
+                <div className="h-full flex flex-col">
+                  <h2
+                    className={`${spaceGrotesk.className} font-bold text-2xl flex gap-3 items-center text-slate-800 mb-8 tracking-tight`}
                   >
-                    <option value="today">Today</option>
-                    <option value="week">This Week</option>
-                    <option value="month">This Month</option>
-                    <option value="all">All Time</option>
-                  </select>
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                      <TrendingUp size="22" className="text-white" />
+                    </div>
+                    Analytics Overview
+                  </h2>
+
+                  {/* Stats Cards */}
+                  <div className="grid grid-cols-2 gap-5 mb-8">
+                    <div className="bg-gradient-to-br from-green-500/10 via-green-400/5 to-transparent p-6 rounded-2xl border border-green-200/50 ">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p
+                            className={`${spaceGrotesk.className} text-3xl font-black text-green-700 mb-1`}
+                          >
+                            {todayStats.available}
+                          </p>
+                          <p className="text-sm text-green-600/80 font-semibold tracking-wide">
+                            Available
+                          </p>
+                        </div>
+                        <div className="p-3 bg-green-500/10 rounded-xl">
+                          <UserCheck className="text-green-600" size="28" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-blue-500/10 via-blue-400/5 to-transparent p-6 rounded-2xl border border-blue-200/50 ">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p
+                            className={`${spaceGrotesk.className} text-3xl font-black text-blue-700 mb-1`}
+                          >
+                            {todayStats.inBusy}
+                          </p>
+                          <p className="text-sm text-blue-600/80 font-semibold tracking-wide">
+                            In (Busy)
+                          </p>
+                        </div>
+                        <div className="p-3 bg-blue-500/10 rounded-xl">
+                          <Phone className="text-blue-600" size="28" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-br from-yellow-500/10 via-yellow-400/5 to-transparent p-6 rounded-2xl border border-yellow-200/50 ">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p
+                            className={`${spaceGrotesk.className} text-3xl font-black text-yellow-700 mb-1`}
+                          >
+                            {todayStats.inBreak}
+                          </p>
+                          <p className="text-sm text-yellow-600/80 font-semibold tracking-wide">
+                            In (Break)
+                          </p>
+                        </div>
+                        <div className="p-3 bg-blue-500/10 rounded-xl">
+                          <Phone className="text-yellow-600" size="28" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-indigo-500/10 via-indigo-400/5 to-transparent p-6 rounded-2xl border border-indigo-200/50 ">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p
+                            className={`${spaceGrotesk.className} text-3xl font-black text-indigo-700 mb-1`}
+                          >
+                            {todayStats.inClass}
+                          </p>
+                          <p className="text-sm text-indigo-600/80 font-semibold tracking-wide">
+                            In Class
+                          </p>
+                        </div>
+                        <div className="p-3 bg-indigo-500/10 rounded-xl">
+                          <Users className="text-indigo-600" size="28" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-red-500/10 via-red-400/5 to-transparent p-6 rounded-2xl border border-red-200/50 ">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p
+                            className={`${spaceGrotesk.className} text-3xl font-black text-red-700 mb-1`}
+                          >
+                            {todayStats.out}
+                          </p>
+                          <p className="text-sm text-red-600/80 font-semibold tracking-wide">
+                            Out
+                          </p>
+                        </div>
+                        <div className="p-3 bg-red-500/10 rounded-xl">
+                          <UserX className="text-red-600" size="28" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Historical Chart */}
                 </div>
-                <div className="h-64">
-                  <Bar data={barData} options={barOptions} />
+              </div>
+
+              {/* Teacher Statuses Panel */}
+              <div className="col-span-1 row-span-2 bg-white border border-neutral-200 rounded-xl teacher-statuses p-6">
+                <div>
+                  <h2
+                    className={`${spaceGrotesk.className} font-[700] text-lg text-gray-800 mb-6 flex items-center gap-2`}
+                  >
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                      <Users size="15" className="text-white" />
+                    </div>{" "}
+                    Teacher Status
+                  </h2>
+
+                  <div className="space-y-3 max-h-[700px] overflow-y-auto">
+                    {facultyData
+                      .sort((a: any, b: any) => {
+                        const aTime = new Date(a.statistics.updatedAt);
+                        const bTime = new Date(b.statistics.updatedAt);
+                        return bTime.getTime() - aTime.getTime();
+                      })
+                      .map((teacher: any, index: any) => (
+                        <motion.div
+                          key={teacher.id}
+                          className="bg-gray-50 hover:bg-gray-100 p-4 rounded-lg cursor-pointer transition-all duration-200 border border-gray-200 hover:border-blue-300 hover:shadow-md"
+                          onClick={() => handleTeacherClick(teacher.id)}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 1, delay: index * 0.1 }}
+                          whileHover={{ filter: "brightness(0.95)" }}
+                          whileTap={{ filter: "brightness(0.9)" }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                  {teacher.name
+                                    .split(" ")
+                                    .map((n: any) => n[0])
+                                    .filter(
+                                      (_: any, i: any, arr: any) =>
+                                        i < 2 || i === arr.length - 1
+                                    )
+                                    .join("")}
+                                </div>
+                                <div
+                                  className={`absolute -bottom-1 -right-1 w-4 h-4 ${getStatusColor(
+                                    teacher.statistics.status
+                                  )} rounded-full border-2 border-white`}
+                                ></div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-semibold text-gray-800 text-sm">
+                                  {teacher.name}
+                                </p>
+                                <p className="text-xs text-gray-500 truncate w-[130px]">
+                                  {teacher.department?.name ||
+                                    "Department missing."}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  <TimeAgoComponent
+                                    timestamp={teacher.statistics.updatedAt}
+                                  />
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                  teacher.statistics.status === "AVAILABLE"
+                                    ? "bg-green-100 text-green-700"
+                                    : teacher.statistics.status === "IN_CLASS"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {getStatusText(teacher.statistics.status)}
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent Activity Panel */}
+              <div className="col-span-2 bg-white border border-neutral-200 rounded-xl h-[400px] call-graph p-6">
+                <div className="h-full flex flex-col">
+                  <h2
+                    className={`${spaceGrotesk.className} font-[700] text-lg text-gray-800 mb-6 flex items-center gap-2`}
+                  >
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                      <IdCard size="15" className="text-white" />
+                    </div>{" "}
+                    Recent Kiosk Student Scans
+                  </h2>
+
+                  <div className="flex-1 overflow-y-auto space-y-4">
+                    {/* Activity Items */}
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="p-2 bg-blue-500 rounded-full">
+                        <UserPlus size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          New Teacher Registered
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Dr. Maria Santos joined Computer Science department
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          2 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-green-50 rounded-lg border border-green-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 }}
+                    >
+                      <div className="p-2 bg-green-500 rounded-full">
+                        <Check size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          System Status Update
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          All RFID scanners are online and functioning
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          5 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-orange-50 rounded-lg border border-orange-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.2 }}
+                    >
+                      <div className="p-2 bg-orange-500 rounded-full">
+                        <Users size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Bulk Data Import
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Successfully imported 45 student records
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          12 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-purple-50 rounded-lg border border-purple-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.3 }}
+                    >
+                      <div className="p-2 bg-purple-500 rounded-full">
+                        <Settings size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Configuration Updated
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Attendance tracking settings modified by admin
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          18 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.4 }}
+                    >
+                      <div className="p-2 bg-indigo-500 rounded-full">
+                        <LineChart size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Weekly Report Generated
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Attendance analytics report for week 36 is ready
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          25 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-red-50 rounded-lg border border-red-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.5 }}
+                    >
+                      <div className="p-2 bg-red-500 rounded-full">
+                        <UserX size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Absence Alert
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Prof. Johnson marked absent for scheduled class
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          32 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-span-3 bg-white border border-neutral-200 rounded-xl h-[400px] call-graph p-6">
+                <div className="h-full flex flex-col">
+                  <h2
+                    className={`${spaceGrotesk.className} font-[700] text-lg text-gray-800 mb-6 flex items-center gap-2`}
+                  >
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                      <Bell size="15" className="text-white" />
+                    </div>{" "}
+                    All Notifications / System Notifications
+                  </h2>
+
+                  <div className="flex-1 overflow-y-auto space-y-4">
+                    {/* Activity Items */}
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-blue-50 rounded-lg border border-blue-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <div className="p-2 bg-blue-500 rounded-full">
+                        <UserPlus size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          New Teacher Registered
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Dr. Maria Santos joined Computer Science department
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          2 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-green-50 rounded-lg border border-green-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.1 }}
+                    >
+                      <div className="p-2 bg-green-500 rounded-full">
+                        <Check size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          System Status Update
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          All RFID scanners are online and functioning
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          5 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-orange-50 rounded-lg border border-orange-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.2 }}
+                    >
+                      <div className="p-2 bg-orange-500 rounded-full">
+                        <Users size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Bulk Data Import
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Successfully imported 45 student records
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          12 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-purple-50 rounded-lg border border-purple-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.3 }}
+                    >
+                      <div className="p-2 bg-purple-500 rounded-full">
+                        <Settings size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Configuration Updated
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Attendance tracking settings modified by admin
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          18 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-indigo-50 rounded-lg border border-indigo-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.4 }}
+                    >
+                      <div className="p-2 bg-indigo-500 rounded-full">
+                        <LineChart size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Weekly Report Generated
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Attendance analytics report for week 36 is ready
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          25 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+
+                    <motion.div
+                      className="flex items-start gap-4 p-4 bg-red-50 rounded-lg border border-red-100"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: 0.5 }}
+                    >
+                      <div className="p-2 bg-red-500 rounded-full">
+                        <UserX size="16" className="text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          Absence Alert
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          Prof. Johnson marked absent for scheduled class
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          32 minutes ago
+                        </p>
+                      </div>
+                    </motion.div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white rounded-lg p-6 shadow">
-                <h2 className="text-xl font-semibold mb-4">Departments</h2>
-                <ul className="list-disc pl-5">
-                  {departments.map((d) => (
-                    <li key={d.id}>
-                      {d.name} (Head: {d.head})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="bg-white rounded-lg p-6 shadow">
-                <h2 className="text-xl font-semibold mb-4">Teachers</h2>
-                <ul className="list-disc pl-5">
-                  {teachers.map((t) => (
-                    <li key={t.id}>
-                      {t.name} ({t.department})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="bg-white rounded-lg p-6 shadow md:col-span-2">
-                <h2 className="text-xl font-semibold mb-4">Students</h2>
-                <ul className="list-disc pl-5">
-                  {students.map((s) => (
-                    <li key={s.id}>
-                      {s.name} (Grade: {s.grade})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </section>
-        )}
-        {["departments", "teachers", "students"].includes(active) && (
-          <section key={active} className="initial-section">
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-3xl font-bold capitalize">{active}</h1>
-              <button
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                onClick={() =>
-                  tableConfigs[
-                    active as "departments" | "teachers" | "students"
-                  ].onAdd()
-                }
-              >
-                Add {active.slice(0, -1)}
-              </button>
-            </div>
-            <SearchBar
-              value={search}
-              onChange={setSearch}
-              placeholder={`Search ${active}...`}
-            />
-            <Table
-              columns={
-                tableConfigs[active as "departments" | "teachers" | "students"]
-                  .columns as { key: string; label: string }[]
-              }
-              data={
-                tableConfigs[active as "departments" | "teachers" | "students"]
-                  .data
-              }
-              onEdit={
-                tableConfigs[active as "departments" | "teachers" | "students"]
-                  .onEdit
-              }
-              onDelete={
-                tableConfigs[active as "departments" | "teachers" | "students"]
-                  .onDelete
-              }
-            />
-          </section>
-        )}
-        {active === "settings" && (
-          <section key="settings" className="initial-section">
-            <h1 className="text-3xl font-bold mb-6">Settings</h1>
-            <div className="bg-white rounded-lg p-6 shadow">
-              Settings content here...
-            </div>
-          </section>
-        )}
-        {active === "auth" && (
-          <section key="auth" className="initial-section">
-            <h1 className="text-3xl font-bold mb-6">
-              User Authentication and Credentials
-            </h1>
-            <div className="bg-white rounded-lg p-6 shadow">
-              Auth content here...
-            </div>
-          </section>
-        )}
-        <AddEditModal
-          open={modal.open}
-          onClose={() => setModal({ open: false, type: null, data: null })}
-          onSave={handleSave}
-          fields={
-            modal.type === "departments"
-              ? (tableConfigs.departments.fields as {
-                  key: string;
-                  label: string;
-                }[])
-              : modal.type === "teachers"
-              ? (tableConfigs.teachers.fields as {
-                  key: string;
-                  label: string;
-                }[])
-              : modal.type === "students"
-              ? (tableConfigs.students.fields as {
-                  key: string;
-                  label: string;
-                }[])
-              : []
-          }
-          initialData={modal.data}
-        />
+          </div>
+        </div>
       </main>
-    </div>
+    </>
   );
 }

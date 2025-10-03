@@ -1,0 +1,277 @@
+/* Container */
+.container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Trigger Button */
+.triggerButton {
+  padding: 16px 32px;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.triggerButton:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Floating Input Box */
+.floatingInput {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  z-index: 1001;
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.floatingInput.inputVisible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.inputBox {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  padding: 20px 30px;
+  min-width: 400px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inputText {
+  font-size: 24px;
+  font-weight: 500;
+  color: #333;
+  min-height: 30px;
+  display: inline-block;
+}
+
+.cursor {
+  font-size: 24px;
+  color: #667eea;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Keyboard Overlay */
+.keyboardOverlay {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+
+/* Keyboard Container */
+.keyboard {
+  background: rgba(40, 40, 40, 0.98);
+  backdrop-filter: blur(20px);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
+  padding: 20px 0;
+  width: 100vw;
+  height: auto;
+  min-height: 400px;
+}
+
+/* Keyboard Header */
+.keyboardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 0 20px 15px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.keyboardHeader h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.closeButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: normal;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+/* Keyboard Body */
+.keyboardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+.keyboardRow {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+/* Keys */
+.key {
+  flex: 1;
+  min-width: 0;
+  height: 80px;
+  max-width: 120px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.key:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.key:active {
+  transform: translateY(0);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Special Keys */
+.spaceKey {
+  flex: 6;
+  max-width: none;
+  font-size: 20px;
+  font-weight: 300;
+}
+
+.backspaceKey {
+  width:200px;
+  background: rgba(255, 100, 100, 0.15);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  font-size: 24px;
+}
+
+.backspaceKey:hover {
+  background: rgba(255, 100, 100, 0.25);
+  border: 1px solid rgba(255, 100, 100, 0.3);
+}
+
+.enterKey {
+  flex: 2;
+  max-width: none;
+  background: rgba(100, 200, 100, 0.15);
+  border: 1px solid rgba(100, 200, 100, 0.2);
+  font-size: 18px;
+  font-weight: 300;
+}
+
+.enterKey:hover {
+  background: rgba(100, 200, 100, 0.25);
+  border: 1px solid rgba(100, 200, 100, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .keyboard {
+    padding: 15px 0;
+    min-height: 360px;
+  }
+  
+  .keyboardBody {
+    padding: 0 6px;
+  }
+  
+  .inputBox {
+    min-width: 300px;
+    padding: 15px 20px;
+  }
+  
+  .key {
+    height: 70px;
+    font-size: 22px;
+    max-width: 100px;
+  }
+}
+
+@media (max-width: 480px) {
+  .keyboard {
+    min-height: 340px;
+  }
+  
+  .keyboardBody {
+    padding: 0 4px;
+    gap: 6px;
+  }
+  
+  .inputBox {
+    min-width: 280px;
+    padding: 12px 16px;
+  }
+  
+  .inputText, .cursor {
+    font-size: 20px;
+  }
+  
+  .key {
+    height: 65px;
+    font-size: 20px;
+    max-width: 80px;
+  }
+  
+  .keyboardRow {
+    gap: 4px;
+  }
+}

@@ -1,0 +1,774 @@
+import React, { useState, useEffect } from "react";
+import { Poppins, Space_Grotesk } from "next/font/google";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Users,
+  Mail,
+  CreditCard,
+  Building2,
+  Search,
+  AlertTriangle,
+  X,
+  Send,
+  MessageSquare,
+} from "lucide-react";
+import { Inter } from "next/font/google";
+import { GetServerSidePropsContext } from "next";
+import { authGate } from "@/middlewares/secureEnokiGate";
+import { useSelector } from "react-redux";
+import { isUserDataComplete, selectUserData } from "@/redux/features/userSlice";
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+import VirtualKeyboard from "@/components/VirtualKeyboard";
+
+const inter = Inter({ subsets: ["latin"] });
+
+type TStatus = "IN_OFFICE" | "BREAK" | "IN_CLASS" | "ABSENT" | "LEAVE";
+
+// Teacher interface
+interface Teacher {
+  id: number;
+  name: string;
+  email: string;
+  departmentId: string;
+  employeeRfidHash: string;
+  statistics: {
+    status: TStatus;
+  };
+  room?: string;
+  avatar: string;
+  joinDate: string;
+}
+
+// Department interface
+interface Department {
+  id: string;
+  name: string;
+}
+
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "IN_OFFICE":
+      return "bg-green-500";
+    case "BREAK":
+      return "bg-yellow-500";
+    case "IN_CLASS":
+      return "bg-blue-500";
+    case "ABSENT":
+      return "bg-red-500";
+    case "LEAVE":
+      return "bg-orange-500";
+    default:
+      return "bg-gray-500";
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status) {
+    case "IN_OFFICE":
+      return "In Office";
+    case "BREAK":
+      return "Break";
+    case "IN_CLASS":
+      return "In Class";
+    case "ABSENT":
+      return "Absent";
+    case "LEAVE":
+      return "Leave";
+    default:
+      return "Unknown";
+  }
+};
+
+export async function getServerSideProps(ctx: GetServerSidePropsContext) {
+  return await authGate(ctx);
+}
+
+export default function TeacherKiosk({ user, queries, api }: any) {
+  const userData = useSelector(selectUserData);
+  const __userData = isUserDataComplete(userData) ? userData : user;
+
+  const [filteredTeachers, setFilteredTeachers] = useState<Teacher[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
+  const [showSearchKeyboard, setShowSearchKeyboard] = useState(false);
+  const [showRfidModal, setShowRfidModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [scannedStudentName, setScannedStudentName] = useState("");
+  const [rfidDetected, setRfidDetected] = useState(false);
+
+  const {
+    data: departmentsData = [],
+    isFetched: departmentsFetched,
+    isPending: departmentsPending,
+    isError: departmentsError,
+    isFetching: departmentsFetching,
+    isRefetching: departmentsRefetching,
+    refetch: departmentRefetch,
+  } = useQuery({
+    queryKey: ["departments"],
+    queryFn: async () => {
+      const res = await axios.get(`${api}/get-departments`, {
+        params: {
+          institutionId: __userData.id,
+        },
+      });
+
+      return res.data.data;
+    },
+    enabled: !!__userData.id,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
+
+  const {
+    data: facultyData = [],
+    isFetched: facultyFetched,
+    isPending: facultyPending,
+    isError: facultyError,
+    isFetching: facultyFetching,
+    isRefetching: facultyRefetching,
+    refetch: facultyRefetch,
+  } = useQuery({
+    queryKey: ["faculty"],
+    queryFn: async () => {
+      const res = await axios.get(`${api}/get-teachers`, {
+        params: {
+          institutionId: __userData.id,
+        },
+      });
+
+      return res.data.data;
+    },
+    enabled: !!__userData.id,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  });
+
+  useEffect(() => {
+    if (facultyPending && facultyData.length === 0) return;
+    const filtered = facultyData
+      .filter(
+        (teacher: any) =>
+          teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          teacher.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          teacher.departmentId.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+
+    setFilteredTeachers(filtered);
+  }, [facultyData, searchTerm, facultyPending]);
+
+  const handleTeacherClick = (teacher: Teacher) => {
+    setSelectedTeacher(teacher);
+    setMessageText(""); // Empty message box when opening
+    setShowMessageModal(true);
+    // Ensure only one modal at a time
+    setShowKeyboard(false);
+    setShowSearchKeyboard(false);
+    setShowRfidModal(false);
+    setShowSuccessModal(false);
+    setShowLoadingModal(false);
+  };
+
+  const handleSendMessage = () => {
+    if (messageText.trim()) {
+      // Close message modal and all other modals, only show RFID modal
+      setShowMessageModal(false);
+      setShowKeyboard(false);
+      setShowSearchKeyboard(false);
+      setShowSuccessModal(false);
+      setShowLoadingModal(false);
+      setRfidDetected(false);
+      setScannedStudentName("");
+      setMessageText(""); // Clear the message text
+
+      setShowRfidModal(true);
+    }
+  };
+
+  const handleRfidScan = async () => {
+    // Fake RFID scan promise with student name
+    const fakeStudentNames = [
+      "John Smith",
+      "Emily Johnson",
+      "Michael Brown",
+      "Sarah Davis",
+      "David Wilson",
+      "Jessica Miller",
+      "Christopher Lee",
+      "Amanda Taylor",
+    ];
+    const randomStudent =
+      fakeStudentNames[Math.floor(Math.random() * fakeStudentNames.length)];
+    setScannedStudentName(randomStudent);
+    setRfidDetected(true);
+
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        console.log(
+          `Message sent to ${selectedTeacher?.name} from ${randomStudent}: ${messageText}`
+        );
+        // Close RFID modal and show loading modal
+        setShowRfidModal(false);
+        setShowLoadingModal(true);
+
+        // Show loading for 3 seconds then show success modal
+        setTimeout(() => {
+          setShowLoadingModal(false);
+          setShowSuccessModal(true);
+          setTimeout(() => {
+            setShowSuccessModal(false);
+            setSelectedTeacher(null);
+            setMessageText("");
+            setScannedStudentName("");
+            setRfidDetected(false);
+          }, 2000);
+        }, 3000);
+        resolve(true);
+      }, 2000);
+    });
+  };
+
+  const handleKeyboardSubmit = (text: string, isSearch = false) => {
+    if (isSearch) {
+      setSearchTerm(text);
+      setShowSearchKeyboard(false);
+    } else {
+      setMessageText(text);
+      setShowKeyboard(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowMessageModal(false);
+    setSelectedTeacher(null);
+    setShowKeyboard(false);
+    setShowRfidModal(false);
+    setShowSuccessModal(false);
+    setShowLoadingModal(false);
+    setMessageText("");
+    setScannedStudentName("");
+    setRfidDetected(false);
+  };
+
+  const cancelRfidScan = () => {
+    setShowRfidModal(false);
+    setRfidDetected(false);
+    setScannedStudentName("");
+    // Reopen message modal for editing
+    setShowMessageModal(true);
+  };
+
+  return (
+    <>
+      <main
+        className={`${poppins.className} bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 min-h-screen`}
+      >
+        <div className="p-8">
+          <header className="mb-8">
+            <div className="text-center mb-8">
+              <h1
+                className={`${spaceGrotesk.className} text-4xl font-bold text-gray-800 mb-2`}
+              >
+                Teacher Directory
+              </h1>
+              <p className="text-gray-600 text-lg">
+                Find and message your teachers
+              </p>
+            </div>
+
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-6 w-6 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={() => {
+                  // Close all other modals before opening search keyboard
+                  setShowKeyboard(false);
+                  setShowMessageModal(false);
+                  setShowRfidModal(false);
+                  setShowSuccessModal(false);
+                  setShowLoadingModal(false);
+                  setShowSearchKeyboard(true);
+                }}
+                readOnly
+                className="block w-full pl-12 pr-4 py-4 text-lg border border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-lg cursor-pointer"
+                placeholder="Search for teachers by name, email, or department..."
+              />
+            </div>
+          </header>
+
+          {/* Loading State */}
+          {facultyPending && (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600 text-lg">Loading teachers...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {facultyError && (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  Error Loading Teachers
+                </h3>
+                <p className="text-gray-600 mb-4">{facultyError}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!facultyPending && !facultyError && facultyData.length === 0 && (
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <Users className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  No Teachers Found
+                </h3>
+                <p className="text-gray-600">
+                  No teachers are available at the moment.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* No Search Results */}
+          {!facultyPending &&
+            !facultyError &&
+            facultyData.length > 0 &&
+            filteredTeachers.length === 0 &&
+            searchTerm.trim() !== "" && (
+              <div className="flex items-center justify-center min-h-[400px]">
+                <div className="text-center">
+                  <Users className="h-20 w-20 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                    No Teachers Found
+                  </h3>
+                  <p className="text-gray-600">
+                    No teachers match "{searchTerm}"
+                  </p>
+                </div>
+              </div>
+            )}
+
+          {/* Teachers Grid */}
+          {!facultyPending && !facultyError && filteredTeachers.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredTeachers.map((teacher, index) => (
+                <motion.div
+                  key={teacher.id}
+                  className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-200 flex flex-col h-full cursor-pointer"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleTeacherClick(teacher)}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                          {teacher.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .filter(
+                              (_, i, arr) => i < 2 || i === arr.length - 1
+                            )
+                            .join("")}
+                        </div>
+                        <div
+                          className={`absolute -bottom-1 -right-1 w-5 h-5 ${getStatusColor(
+                            teacher.statistics.status
+                          )} rounded-full border-2 border-white`}
+                        ></div>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-800 text-lg">
+                          {teacher.name}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {
+                            departmentsData.find(
+                              (d: Department) => d.id === teacher.departmentId
+                            )?.name
+                          }
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-xs px-3 py-1 rounded-full font-medium ${
+                        teacher.statistics.status === "IN_OFFICE"
+                          ? "bg-green-100 text-green-700"
+                          : teacher.statistics.status === "IN_CLASS"
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {getStatusText(teacher.statistics.status)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
+                    {teacher.statistics.status === "IN_CLASS" &&
+                      teacher.room && (
+                        <div className="flex items-center gap-2 text-sm text-blue-600">
+                          <Building2 size="16" />
+                          <span>
+                            RM {teacher.room.toString().toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                  </div>
+
+                  <div className="mt-auto pt-4 border-t border-gray-100">
+                    <div className="flex items-center justify-center gap-2 text-blue-600 font-medium">
+                      <MessageSquare size="16" />
+                      <span>Send Message</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Message Modal */}
+        <AnimatePresence>
+          {showMessageModal && selectedTeacher && (
+            <motion.div
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[1100] w-full max-w-2xl p-4"
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{
+                scale: 1,
+                opacity: 1,
+                y: showKeyboard ? -160 : 0,
+              }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{
+                type: "spring",
+                damping: 25,
+                stiffness: 300,
+                duration: 0.4,
+              }}
+            >
+              <div className="bg-white rounded-3xl shadow-2xl border border-white/20 p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-xl">
+                        {selectedTeacher.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .filter((_, i, arr) => i < 2 || i === arr.length - 1)
+                          .join("")}
+                      </div>
+                      <div
+                        className={`absolute -bottom-1 -right-1 w-5 h-5 ${getStatusColor(
+                          selectedTeacher.statistics.status
+                        )} rounded-full border-2 border-white`}
+                      ></div>
+                    </div>
+                    <div>
+                      <h2
+                        className={`${spaceGrotesk.className} text-2xl font-bold text-gray-800`}
+                      >
+                        {selectedTeacher.name}
+                      </h2>
+                      <p className="text-gray-600">
+                        {
+                          departmentsData.find(
+                            (d: Department) =>
+                              d.id === selectedTeacher.departmentId
+                          )?.name
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeModal}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                  >
+                    <X size="24" />
+                  </button>
+                </div>
+
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                    Send a Message
+                  </h3>
+                  <div className="bg-gray-50 rounded-2xl p-4 min-h-[120px] border border-gray-300">
+                    <textarea
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      onFocus={() => {
+                        // Close all other modals before opening message keyboard
+                        setShowSearchKeyboard(false);
+                        setShowRfidModal(false);
+                        setShowSuccessModal(false);
+                        setShowLoadingModal(false);
+                        setShowKeyboard(true);
+                      }}
+                      readOnly
+                      className="w-full h-full min-h-[100px] bg-transparent border-none outline-none resize-none text-gray-800 placeholder-gray-500 cursor-pointer"
+                      placeholder="Click here to type your message..."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <motion.button
+                    onClick={closeModal}
+                    className="flex-1 px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    onClick={handleSendMessage}
+                    disabled={!messageText.trim()}
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200"
+                    whileHover={{ scale: messageText.trim() ? 1.01 : 1 }}
+                    whileTap={{ scale: messageText.trim() ? 0.99 : 1 }}
+                  >
+                    <Send size="20" />
+                    Send Message
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* RFID Scan Modal */}
+        <AnimatePresence>
+          {showRfidModal && (
+            <motion.div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-white rounded-3xl shadow-2xl border border-white/20 p-8 w-full max-w-md text-center"
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{
+                  type: "spring",
+                  damping: 25,
+                  stiffness: 300,
+                }}
+              >
+                <div className="mb-6">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white mx-auto mb-4">
+                    <CreditCard size="40" />
+                  </div>
+                  <h2
+                    className={`${spaceGrotesk.className} text-2xl font-bold text-gray-800 mb-2`}
+                  >
+                    Scan Your RFID
+                  </h2>
+                  <p className="text-gray-600">
+                    Please scan your RFID card to send the message
+                  </p>
+                </div>
+
+                {!rfidDetected && (
+                  <div className="mb-6">
+                    <div className="animate-pulse bg-blue-50 rounded-2xl p-6 border-2 border-dashed border-blue-300">
+                      <div className="w-12 h-12 bg-blue-200 rounded-full mx-auto mb-3"></div>
+                      <p className="text-blue-600 font-medium">
+                        Waiting for RFID scan...
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {rfidDetected && scannedStudentName && (
+                  <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
+                    <p className="text-green-800 font-medium text-center">
+                      RFID Detected: {scannedStudentName}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <motion.button
+                    onClick={cancelRfidScan}
+                    className="flex-1 px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Cancel
+                  </motion.button>
+                  <motion.button
+                    onClick={() => {
+                      handleRfidScan();
+                    }}
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    Simulate RFID Scan
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Loading Modal */}
+        <AnimatePresence>
+          {showLoadingModal && (
+            <motion.div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-white rounded-3xl shadow-2xl border border-white/20 p-8 w-full max-w-md text-center"
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{
+                  type: "spring",
+                  damping: 25,
+                  stiffness: 300,
+                }}
+              >
+                <div className="mb-6">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white mx-auto mb-4">
+                    <Send size="40" className="animate-pulse" />
+                  </div>
+                  <h2
+                    className={`${spaceGrotesk.className} text-2xl font-bold text-gray-800 mb-2`}
+                  >
+                    Sending Message...
+                  </h2>
+                  <p className="text-gray-600">
+                    Please wait while your message is being sent to{" "}
+                    {selectedTeacher?.name}
+                  </p>
+                  {scannedStudentName && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      From: {scannedStudentName}
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <p className="text-blue-800 font-medium">Processing...</p>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Success Modal */}
+        <AnimatePresence>
+          {showSuccessModal && (
+            <motion.div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-white rounded-3xl shadow-2xl border border-white/20 p-8 w-full max-w-md text-center"
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{
+                  type: "spring",
+                  damping: 25,
+                  stiffness: 300,
+                }}
+              >
+                <div className="mb-6">
+                  <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white mx-auto mb-4">
+                    <Send size="40" />
+                  </div>
+                  <h2
+                    className={`${spaceGrotesk.className} text-2xl font-bold text-gray-800 mb-2`}
+                  >
+                    Message Sent!
+                  </h2>
+                  <p className="text-gray-600">
+                    Your message has been successfully sent to{" "}
+                    {selectedTeacher?.name}
+                  </p>
+                  {scannedStudentName && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      Sent by: {scannedStudentName}
+                    </p>
+                  )}
+                </div>
+
+                <div className="bg-green-50 rounded-2xl p-4 border border-green-200">
+                  <p className="text-green-800 font-medium">✓ Sent</p>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Virtual Keyboard for Search */}
+        <VirtualKeyboard
+          isVisible={showSearchKeyboard}
+          onClose={() => setShowSearchKeyboard(false)}
+          onSubmit={(text) => handleKeyboardSubmit(text, true)}
+          placeholder="Search for teachers..."
+          initialValue={searchTerm}
+          onChange={(text) => setSearchTerm(text)}
+        />
+
+        {/* Virtual Keyboard for Message */}
+        <VirtualKeyboard
+          isVisible={showKeyboard}
+          onClose={() => setShowKeyboard(false)}
+          onSubmit={(text) => handleKeyboardSubmit(text, false)}
+          placeholder="Type your message to the teacher..."
+          initialValue={messageText}
+          onChange={(text) => setMessageText(text)}
+        />
+      </main>
+    </>
+  );
+}
