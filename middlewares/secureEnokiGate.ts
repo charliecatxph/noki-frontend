@@ -14,6 +14,8 @@ const protectedRoutes = [
 
 export const authGate = async (ctx: GetServerSidePropsContext) => {
   const cookie = parse(ctx.req.headers.cookie || "")?.refreshToken || "";
+
+  console.log(cookie)
   const { query } = ctx;
   const server = process.env.API;
 
@@ -31,6 +33,7 @@ export const authGate = async (ctx: GetServerSidePropsContext) => {
       }
     );
 
+
     const userData = {
       ...(jwt.decode(res.data.token) as object),
       token: res.data.token,
@@ -39,7 +42,25 @@ export const authGate = async (ctx: GetServerSidePropsContext) => {
     if (redirectIfLoggedIn.some((route) => route === resolvedUrl)) {
       return {
         redirect: {
-          destination: "/404",
+          destination: "/",
+          permanent: false,
+        },
+      };
+    }
+
+    if (userData.actType !== "KIOSK" && resolvedUrl === "/kiosk") {
+      return {
+        redirect: {
+          destination: "/",
+          permanent: false,
+        },
+      };
+    }
+
+    if (userData.actType !== "OWNER" && resolvedUrl === "/") {
+      return {
+        redirect: {
+          destination: "/invalid-user-permissions",
           permanent: false,
         },
       };

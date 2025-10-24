@@ -95,12 +95,12 @@ export default function Courses({
     queryFn: async () => {
       const res = await axios.get(`${api}/get-courses`, {
         params: {
-          institutionId: __userData.id,
+          institutionId: __userData.institutionId,
         },
       });
       return res.data.data;
     },
-    enabled: !!__userData.id,
+    enabled: !!__userData.userId,
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnMount: true,
@@ -180,7 +180,7 @@ export default function Courses({
           queryFn: async () => {
             const res = await axios.post(`${api}/create-course`, {
               name: formData.name,
-              institutionId: __userData.id,
+              institutionId: __userData.institutionId,
             });
             return res.data;
           },
@@ -230,27 +230,24 @@ export default function Courses({
                     placeholder="Search courses..."
                   />
                 </div>
-                <motion.button
+                <button
                   onClick={handleAddCourse}
                   className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                
                 >
                   <Plus size="20" />
                   Add Course
-                </motion.button>
+                </button>
               </div>
             </header>
 
             <div className="main-panel p-5">
               <AnimatePresence>
                 {coursesRefetching && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                  <div
+
                     key={"EXIC"}
-                    transition={{ duration: 0.2 }}
+                   
                     className="refetch p-5 flex gap-5 items-center absolute bottom-0 right-0"
                   >
                     <CircularProgress
@@ -262,7 +259,7 @@ export default function Courses({
                       }}
                     />{" "}
                     <span>Getting latest data...</span>
-                  </motion.div>
+                  </div>
                 )}
               </AnimatePresence>
 
@@ -306,15 +303,14 @@ export default function Courses({
                       No courses have been created yet.
                     </p>
 
-                    <motion.button
+                    <button
                       onClick={handleAddCourse}
                       className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all duration-200 mx-auto"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
+                     
                     >
                       <Plus size="20" />
                       Add First Course
-                    </motion.button>
+                    </button>
                   </div>
                 </div>
               )}
@@ -343,13 +339,10 @@ export default function Courses({
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredCourses.map((course, index) => {
                       return (
-                        <motion.div
+                        <div
                           key={course.id}
                           className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-200 flex flex-col h-full"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ duration: 0.3, delay: index * 0.1 }}
-                          whileHover={{ y: -2 }}
+                         
                         >
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
@@ -398,26 +391,24 @@ export default function Courses({
                           </div>
 
                           <div className="flex gap-2 mt-auto">
-                            <motion.button
+                            <button
                               onClick={() => handleEditCourse(course)}
                               className="flex-1 bg-blue-50 text-blue-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors duration-200 flex items-center justify-center gap-1"
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
+                            
                             >
                               <Edit3 size="14" />
                               Edit
-                            </motion.button>
-                            <motion.button
+                            </button>
+                            <button
                               onClick={() => handleDeleteCourse(course)}
                               className="flex-1 bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors duration-200 flex items-center justify-center gap-1"
-                              whileHover={{ scale: 1.02 }}
-                              whileTap={{ scale: 0.98 }}
+                            
                             >
                               <Trash2 size="14" />
                               Delete
-                            </motion.button>
+                            </button>
                           </div>
-                        </motion.div>
+                        </div>
                       );
                     })}
                   </div>
@@ -426,22 +417,13 @@ export default function Courses({
               {/* Add/Edit Course Modal */}
               <AnimatePresence>
                 {showModal && (
-                  <motion.div
+                  <div
                     className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                  
                   >
-                    <motion.div
+                    <div
                       className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 w-full max-w-md"
-                      initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                      animate={{ scale: 1, opacity: 1, y: 0 }}
-                      exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                      transition={{
-                        type: "spring",
-                        damping: 25,
-                        stiffness: 300,
-                      }}
+                    
                     >
                       <div className="flex justify-between items-center mb-6">
                         <h2
@@ -479,51 +461,38 @@ export default function Courses({
                       </div>
 
                       <div className="flex gap-4 mt-8">
-                        <motion.button
+                        <button
                           onClick={() => setShowModal(false)}
                           className="flex-1 px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.99 }}
+                      
                         >
                           Cancel
-                        </motion.button>
-                        <motion.button
+                        </button>
+                        <button
                           onClick={handleSaveCourse}
                           disabled={!formData.name.trim()}
                           className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-200"
-                          whileHover={{
-                            scale: formData.name.trim() ? 1.01 : 1,
-                          }}
-                          whileTap={{ scale: formData.name.trim() ? 0.99 : 1 }}
+       
                         >
                           <Save size="16" />
                           {editingCourse ? "Update Course" : "Add Course"}
-                        </motion.button>
+                        </button>
                       </div>
-                    </motion.div>
-                  </motion.div>
+                    </div>
+                  </div>
                 )}
               </AnimatePresence>
 
               {/* Confirmation Dialog */}
               <AnimatePresence>
                 {showConfirmDialog && confirmAction && (
-                  <motion.div
+                  <div
                     className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                  
                   >
-                    <motion.div
+                    <div
                       className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 p-6 w-full max-w-md"
-                      initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                      animate={{ scale: 1, opacity: 1, y: 0 }}
-                      exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                      transition={{
-                        type: "spring",
-                        damping: 25,
-                        stiffness: 300,
-                      }}
+                     
                     >
                       <div className="text-center">
                         <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100 mb-4">
@@ -542,15 +511,14 @@ export default function Courses({
                             `Are you sure you want to delete ${confirmAction.course?.name}? This action cannot be undone.`}
                         </p>
                         <div className="flex gap-3">
-                          <motion.button
+                          <button
                             onClick={() => setShowConfirmDialog(false)}
                             className="flex-1 px-4 py-2 border border-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors duration-200"
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                          
                           >
                             Cancel
-                          </motion.button>
-                          <motion.button
+                          </button>
+                          <button
                             onClick={() => {
                               if (
                                 confirmAction.type === "edit" &&
@@ -569,16 +537,15 @@ export default function Courses({
                                 ? "bg-red-500 text-white hover:bg-red-600"
                                 : "bg-blue-500 text-white hover:bg-blue-600"
                             }`}
-                            whileHover={{ scale: 1.01 }}
-                            whileTap={{ scale: 0.99 }}
+                          
                           >
                             {confirmAction.type === "edit" && "Edit"}
                             {confirmAction.type === "delete" && "Delete"}
-                          </motion.button>
+                          </button>
                         </div>
                       </div>
-                    </motion.div>
-                  </motion.div>
+                    </div>
+                  </div>
                 )}
               </AnimatePresence>
             </div>
